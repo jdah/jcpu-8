@@ -1,0 +1,228 @@
+JCPU! (More of a computer, really. The processor is the JCPU.)
+
+* Registers *
+B - 0x00 - General purpose register
+C - 0x01 - General purpose register
+H - 0x02 - High byte of indirect address
+L - 0x03 - Low byte of indirect address
+D - 0x04 - General purpose register
+E - 0x05 - General purpose register
+A - 0x06 - General purpose register
+F - 0x07 - ALU flags register
+
+Flags register
+ALU Carry
+X > Y
+X = Y
+X < Y
+?
+?
+?
+?
+
+* Opcodes *
+X bit determines if the second (or first, on one argument instructions) argument is an immediate value or a register 
+code (1 = immediate, 0 = reg). In the case of LWA and SWA, the three X bits are the register argument, as the machine
+only has two arguments for each instruction.
++--------------+-------------------+------------------------------+--------------------------+
+|Opcode        |Mnemonic           |Function                      |Description               |
++-----------------------------------------------------------------+--------------------------+
+|00000000 (00) | LW  (Register)    | Register = [HL]              | Load word                |
+|X0000001 (01) | SW  (Register)    | [HL] = Register              | Store word               |
+|00000010 (02) | LDA (High) (Low)  | H = High, L = Low            | Load address             |
+|00000011 (03) | LC  (Reg) (Const) | Reg = Const                  | Load constant            |
+|X0000100 (04) | ADD (Reg) (Reg)   | Reg(0) = Reg + Reg           | Add                      |
+|X0000101 (05) | OR  (Reg) (Reg)   | Reg(0) = Reg OR Reg          | OR                       |
+|X0000110 (06) | NOR (Reg) (Reg)   | Reg(0) = Reg NOR Reg         | NOR                      |
+|X0000111 (07) | AND (Reg) (Reg)   | Reg(0) = Reg AND Reg         | AND                      |
+|X0001000 (08) | JNZ (Register)    | PC = Reg != 0 ? HL : PC      | Jump if not zero         |
+|X0001001 (09) | MW  (Reg) (Reg)   | Reg(1) = Reg(0)              | Move word                |
+|X0001010 (0A) | LDF (Reg) (Reg)   | F = Flags (Compares regs)    | Load flags (compare)     |
+|0XXX1011 (0B) | LWA (Reg) (H) (L) | Register = [HL] (Constant)   | Load word at (memory)    |
+|0XXX1101 (0D) | SWA (Reg) (H) (L) | [HL] = Register (Constant)   | Store word at (memory)   |
+|X0001100 (0C) | ADC (Reg) (Reg)   | Reg(0) = Reg + Reg           | Add, use flags for carry |
+|X0001110 (0E) | PUSH (Reg)        | [SP] = Reg, SP--             | Push to the stack        |
+|X0001111 (0F) | POP (Reg)         | SP++, Reg = [SP]             | Pop from the stack       |
++--------------+-------------------+------------------------------+--------------------------+
+
+* Memory layout *
+EEPROM (32 KiB) 	0x0000 - 0x7EEE
+SRAM (31.75 KiB) 	0x8000 - 0xFEFF*
+256 I/O Ports 		0xFF00 - 0xFFFF
+
+*The first 512 bytes of RAM are reserved for use by the assembler for a stack (0x8100-0x81FF) and for scratch space for
+the programmer (0x8000-0x80FF).
+
+Only 6 of the 256 possible IO ports are mapped to anything useful. IO ports 0-3 and 6-9 are used for communication
+between a Raspberry Pi and the computer. 0-3 are output registers and registers 6-9 are used for input from the
+Raspberry Pi. 'IO' registers 4 and 5 are used to store the stack pointer.
+
+* Assembler Macros *
+Due to the CPU lacking in a lot of functionality, the assembler has to have macros for a lot of operations. NOTE: H and
+L are frequently trashed by these operations. Do NOT use these as general purpose registers, or assume that their values
+will hold through any operations!
+
+JNZ (reg) (high) (low)
+	LDA high low
+	JNZ reg
+
+JNZ (reg) (reg0) (reg1)
+	MW reg0 H
+	MW reg1 L
+	JNZ reg
+
+JZ (reg) (high) (low)
+	LDA high low
+	EQU reg 0x00
+	JNZ F
+
+JZ (reg) (reg0) (reg1)
+	MW reg0 H
+	MW reg1 L
+	EQU reg 0x00
+	JNZ F
+
+JMP (reg0) (reg1)		; Jump to location [reg0 reg1]
+	MW reg0 H
+	MW reg1 L
+	JNZ 0x01
+
+JMP (high) (low) 		; Jump to location [high low]
+	LDA high low
+	JNZ 0x01
+
+JC (reg0) (reg1) 		; If carry bit is true, jump to [reg0 reg1]
+	MW reg0 H
+	MW reg1 L
+	AND F 0x01
+	JNZ F
+
+JC (high) (low)
+	AND F 0x01
+	LDA high low
+	JNZ F
+
+JNC (reg0) (reg1) 		; If carry bit is false, jump to [reg0 reg1]
+	MW reg0 H
+	MW reg1 L
+	NOR F F
+	AND F 0x01
+	JNZ F
+
+JNC (high) (low)
+	LDA high low
+	NOR F F
+	AND F 0x01
+	JNZ F
+
+NOT (reg)
+	NOR reg reg
+
+NAND (reg0) (reg1) 
+	AND reg0 reg1
+	NOR reg0 reg0
+
+XOR (reg0) (reg1)
+	MW reg1 H
+	AND reg0 reg1
+	NOR H reg0
+	NOR reg0 H
+
+XNOR (reg0) (reg1)
+	MW reg0 H
+	MW reg1 L
+	NOR H L
+	NOR reg0 H
+	NOR H reg1
+	NOR reg0 H
+
+STC 					; Sets the carry bit
+	OR F 0x01
+
+SUB (reg0) (reg1)
+	MW reg1 H
+	NOR H H
+	OR F 0x01
+	ADC reg0 H
+
+GTN (reg0) (reg1) 		; reg0 = reg0 > reg1 ? (>0x00) : 0x00
+	LDF reg0 reg1
+	AND F 0x02
+	MW F reg0
+
+LTN (reg0) (reg1) 		; reg0 = reg0 < reg1 ? (>0x00) : 0x00
+	LDF reg0 reg1
+	AND F 0x08
+	MW F reg0
+
+EQU (reg0) (reg1)		; reg0 = reg0 == reg1 ? (>0x00) : 0x00
+	LDF reg0 reg1
+	AND F 0x04
+	MW F reg0
+
+CALL (reg0) (reg1)	
+	PUSH $H
+	PUSH $L
+	MW reg0 H
+	MW reg1 L
+	JNZ 0x01
+
+CALL (high) (low)
+	PUSH $H
+	PUSH $L
+	LDA high low
+	JNZ 0x01
+
+RET 
+	POP L
+	POP H
+	JNZ 0x01
+
+NOP
+	MW F F
+
+INC (reg)
+	ADD reg 0x01
+
+DEC (reg)
+	OR F 0x01
+	ADC reg0 0xFE
+
+Machine Raspberry Pi Communication Protocol:
+The processor has 4 registers coming in from the Raspberry Pi, and four registers going out. The first register of the
+outgoing data registers is used to give the Raspberry Pi a code which it will place in the first register of the incoming
+IO registers when it has completed the processor's request. The following is a list of commands the processor can issue
+to the Raspberry Pi:
+
+OPERATION 			(CODE) (IO2) (IO3)			RESPONSE 			(IO1) (IO2) (IO3)
+
+GEN_SPRITE_ID 		(0x01) (N/A) (N/A)			SPRITE_ID 			(Sprite ID) (N/A) (N/A)		; Returns 0xFF if out of sprite IDs
+DEL_SPRITE_ID		(0x02) (Sprite ID) (N/A) 	NONE
+BUILD_SPRITE		(0x03) (Sprite ID) (N/A)	NONE
+END_BUILD_SPRITE 	(0x04) (N/A) (N/A) 			NONE
+UPLOAD_PIXEL_LOCX 	(0x05) (High) (Low)			NONE
+UPLOAD_PIXEL_LOCY	(0x06) (High) (Low)			NONE
+UPLOAD_PIXEL_COLOR	(0x07) (COLOR)				NONE											; In order of X, Y, Color
+KEYBOARD_HAS_NEXT	(0x08) (N/A) (N/A) 			KEYBOARD_HAS_NEXT 	(True/False) (N/A) (N/A)
+KEYBOARD_NEXT 		(0x09) (N/A) (N/A) 			KEYBOARD_NEXT 		(Keycode) (0 = Press, 1 = Release) (N/A)
+KEYBOARD_CLEAR_BUF	(0x0A) (N/A) (N/A)			NONE
+TRANSLATE_GRAPHICSX	(0x0B) (High) (Low)			NONE
+TRANSLATE_GRAPHICSY	(0x0C) (High) (Low)			NONE
+TRANSLATE_RESET		(0x0D) (N/A)  (N/A)			NONE
+TRANSLATE_SIGN		(0x0E) (Sign) (N/A)			NONE 											; Indicate sign of next translation. Non-zero = negative
+STORAGE_ADDR_HIGH	(0x0F) (HH) (HL)			NONE
+STORAGE_ADDR_LOW	(0x10) (LH) (LL)			NONE
+STORAGE_READ		(0x11) (N/A) (N/A)			STORAGE_DATA		(High) (Low) (N/A)
+STORAGE_WRITE		(0x12) (High) (Low)			NONE
+STORAGE_SIZE_MB		(0x13) (N/A) (N/A)			STORAGE_SIZE 		(High) (Low) (N/A)
+IO_ADDRESS			(0x14) (High) (Low)			NONE
+IO_WRITE			(0x15) (High) (Low)			NONE
+IO_READ				(0x16) (N/A) (N/A)			IO_DATA				(Data) (Data) (Data)
+GRAPHICS_WIDTH		(0x17) (N/A) (N/A)			GRAPHICS_WIDTH		(High) (Low) (N/A)
+GRAPHICS_HEIGHT		(0x18) (N/A) (N/A)			GRAPHICS_HEIGHT		(High) (Low) (N/A)
+GRAPHICS_CLEAR		(0x19) (N/A) (N/A)			NONE
+DRAW_SPRITE			(0x20) (Sprite ID) (N/A)	NONE
+GRAPHICS_COLOR		(0x21) (Color) (N/A)		NONE											; Override the color of all new pixels being drawn
+GRAPHICS_UNCOLOR	(0x22) (N/A) (N/A)			NONE											; Return to normal color after the previous command
+GRAPHICS_MOVE_X		(0x23) (Sign) (Distance)	NONE											; Move video memory around on the X-axis. Non-zero sign = negative
+GRAPHICS_MOVE_Y		(0x24) (Sign) (Distance)	NONE											; Same as above for Y-axis

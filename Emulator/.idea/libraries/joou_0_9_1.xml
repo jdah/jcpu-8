@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="joou-0.9.1">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/joou-0.9.1.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>fileTypes</key>
+	<array>
+		<string>asm</string>
+	</array>
+	<key>name</key>
+	<string>JCPU Assembly</string>
+	<key>patterns</key>
+	<array>
+		<dict>
+			<key>match</key>
+			<string>;.*$</string>
+			<key>name</key>
+			<string>comment.line</string>
+		</dict>
+		<dict>
+			<key>match</key>
+			<string>(\b|,)0x.*[0-9a-fA-F](\b|,)</string>
+			<key>name</key>
+			<string>constant.numeric.hex</string>
+		</dict>
+		<dict>
+			<key>match</key>
+			<string>#.*$</string>
+			<key>name</key>
+			<string>entity.name.section</string>
+		</dict>
+		<dict>
+			<key>match</key>
+			<string>\b(lw|sw|lda|lc|add|or|nor|and|jnz|mw|ldf|lwa|swa|adc|push|pop|jmp|jc|jnc|not|nand|xor|xnor|stc|sub|gtn|ltn|equ|mov|movmr|movrm|call|ret|nop|inc|dec)</string>
+			<key>name</key>
+			<string>keyword.control</string>
+		</dict>
+		<dict>
+			<key>match</key>
+			<string>%(a|b|c|d|e|f|h|l)+\b</string>
+			<key>name</key>
+			<string>storage.type</string>
+		</dict>
+		<dict>
+			<key>match</key>
+			<string>^\S+:</string>
+			<key>name</key>
+			<string>entity.name.label</string>
+		</dict>
+	</array>
+	<key>scopeName</key>
+	<string>source.asm.jcpu</string>
+	<key>uuid</key>
+	<string>84DDB367-0875-4FF3-8047-D3FF2988B3C9</string>
+</dict>
+</plist>
